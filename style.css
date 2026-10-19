@@ -97,7 +97,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .faq-list details p { padding-top: 10px; }
 .faq-more { grid-column: 2; justify-self: start; }
 .preview-card .pill { text-transform: uppercase; letter-spacing: .06em; }
+/* Subscription pricing */
+.pricing-section{padding:76px 0 82px;scroll-margin-top:20px}.pricing-heading{max-width:650px;margin-bottom:28px}.pricing-heading h2{font:700 clamp(32px,4vw,46px)/1.08 'Playfair Display',serif;letter-spacing:-.025em;margin:0}.pricing-heading>p:last-child{color:var(--muted);line-height:1.6}.pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch}.plan-card{display:flex;flex-direction:column;padding:26px;background:var(--card);border:1px solid var(--line)}.plan-card.featured{border:2px solid var(--teal);box-shadow:6px 7px 0 #d7e9df}.plan-label{font:11px 'DM Mono',monospace;color:var(--teal);letter-spacing:.1em;margin:0 0 12px}.plan-card h3{font:700 28px 'Playfair Display',serif;margin:0}.plan-price{font-size:30px;font-weight:700;margin:11px 0 20px}.plan-price span{font-size:14px;font-weight:500;color:var(--muted)}.plan-card ul{padding-left:19px;line-height:1.55;color:var(--muted);margin:0 0 25px}.plan-card li{padding:4px 0}.plan-button{display:block;margin-top:auto;width:100%;padding:13px 16px;border:1px solid var(--teal);background:var(--teal);color:#fff;text-align:center;text-decoration:none;font:600 15px 'DM Sans',sans-serif;cursor:pointer}.plan-button.secondary{background:transparent;color:var(--teal)}.plan-button:hover{filter:brightness(.94)}.plan-button:disabled{opacity:.65;cursor:wait}.pricing-note{font-size:13px;line-height:1.5;color:var(--muted);margin-top:19px}
 @media (max-width: 760px) {
+  .pricing-grid { grid-template-columns: 1fr; }
   .methodology { grid-template-columns: 1fr; padding: 32px 22px; gap: 20px; }
   .methodology-note { grid-column: auto; }
   .match-guide, .home-faq { padding-top: 55px; }
