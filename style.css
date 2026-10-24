@@ -97,10 +97,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
 .faq-list details p { padding-top: 10px; }
 .faq-more { grid-column: 2; justify-self: start; }
 .preview-card .pill { text-transform: uppercase; letter-spacing: .06em; }
-/* Subscription pricing */
-.pricing-section{padding:76px 0 82px;scroll-margin-top:20px}.pricing-heading{max-width:650px;margin-bottom:28px}.pricing-heading h2{font:700 clamp(32px,4vw,46px)/1.08 'Playfair Display',serif;letter-spacing:-.025em;margin:0}.pricing-heading>p:last-child{color:var(--muted);line-height:1.6}.pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch}.plan-card{display:flex;flex-direction:column;padding:26px;background:var(--card);border:1px solid var(--line)}.plan-card.featured{border:2px solid var(--teal);box-shadow:6px 7px 0 #d7e9df}.plan-label{font:11px 'DM Mono',monospace;color:var(--teal);letter-spacing:.1em;margin:0 0 12px}.plan-card h3{font:700 28px 'Playfair Display',serif;margin:0}.plan-price{font-size:30px;font-weight:700;margin:11px 0 20px}.plan-price span{font-size:14px;font-weight:500;color:var(--muted)}.plan-card ul{padding-left:19px;line-height:1.55;color:var(--muted);margin:0 0 25px}.plan-card li{padding:4px 0}.plan-button{display:block;margin-top:auto;width:100%;padding:13px 16px;border:1px solid var(--teal);background:var(--teal);color:#fff;text-align:center;text-decoration:none;font:600 15px 'DM Sans',sans-serif;cursor:pointer}.plan-button.secondary{background:transparent;color:var(--teal)}.plan-button:hover{filter:brightness(.94)}.plan-button:disabled{opacity:.65;cursor:wait}.pricing-note{font-size:13px;line-height:1.5;color:var(--muted);margin-top:19px}
 @media (max-width: 760px) {
-  .pricing-grid { grid-template-columns: 1fr; }
   .methodology { grid-template-columns: 1fr; padding: 32px 22px; gap: 20px; }
   .methodology-note { grid-column: auto; }
   .match-guide, .home-faq { padding-top: 55px; }
@@ -439,3 +436,10 @@ footer a { color: #3157d5; }
   .nav-links a { font-size: 12px; }
   .analyzer { padding: 21px 17px; }
 }
+
+
+/* AI interview practice */
+.interview-settings{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;max-width:620px;margin:18px 0}.interview-settings label,#interviewSession label{font-weight:700}.interview-settings select{padding:11px;border:1px solid var(--line);font:15px 'DM Sans',sans-serif}.interview-consent{max-width:760px;color:var(--muted);font-size:13px;line-height:1.5}.interview-consent a{color:var(--teal);font-weight:700}.interview-session{margin-top:24px;padding:22px;background:#f2f8f5;border:1px solid #c8d7d1}.interview-session h4{font:700 23px/1.35 'Playfair Display',serif}.interview-session textarea{display:block;margin:9px 0 14px;background:#fff}.interview-feedback{margin:18px 0;line-height:1.55}.interview-feedback:empty{display:none}.interview-feedback h4{margin:0 0 8px}.interview-feedback ul{margin-top:5px}.interview-feedback strong{display:block;margin-top:12px}
+@media(max-width:700px){.interview-settings{grid-template-columns:1fr}.interview-session{padding:16px}}
+
+.interview-voice-toggle{display:flex;align-items:center;gap:8px;margin:14px 0;font-weight:600}.interview-voice-toggle input{width:auto}.voice-controls{display:flex;align-items:center;gap:12px;margin:10px 0}.interview-session textarea#codeAnswer{font:14px/1.55 Consolas,Monaco,monospace;tab-size:4;background:#172033;color:#f2f5ff;border:1px solid #303d59}.coding-workspace{display:grid;gap:12px;margin-top:16px}.coding-workspace label{margin-top:8px}.coding-workspace select{max-width:260px;padding:10px;border:1px solid var(--line);font:15px 'DM Sans',sans-serif}.coding-workspace .muted{margin:0}

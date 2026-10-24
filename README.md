@@ -17,8 +17,15 @@ improvements, and interview preparation topics.
 - 🔑 Important keywords
 - 📝 Resume improvement suggestions
 - 🎤 Interview preparation
-- 🔒 Privacy-focused browser processing
+- 🤖 AI mock interviews with tailored questions and answer feedback (Cloudflare Worker + OpenAI API)
+- 🔒 Browser-based résumé report; AI interview text is sent only on opt-in
 - 🆓 Free to use
+
+## 🤖 AI Mock Interview Setup
+
+The mock interview feature is included in the analysis report. It asks for an introduction, drills into the strongest résumé project, asks DBMS/OOP questions, gives a coding problem, reviews the submitted code, asks about complexity, and gives final feedback. Users can answer by microphone or type; questions can be spoken aloud.
+
+To enable it, deploy the separate Worker in `api-worker/`, set `OPENAI_API_KEY` as a Cloudflare secret, then add that Worker URL to `interviewApiUrl` in `config.js`. See `api-worker/README.md` for setup and rate-limiting notes. Résumé text and job descriptions are sent only after the interview starts; microphone audio is sent only after the user records an answer.
 
 ## 🌐 Live Demo
 

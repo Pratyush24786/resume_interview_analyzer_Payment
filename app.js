@@ -6,6 +6,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 const $ = (id) => document.getElementById(id);
 const MAX_SIZE = 5 * 1024 * 1024;
 let cleanResumeText = "";
+let cleanJobDescription = "";
+let interviewState = null;
 
 const SKILLS = {
   Programming: [
@@ -460,7 +462,8 @@ $("analysisForm").addEventListener("submit", async (event) => {
     }
 
     cleanResumeText = resume.replace(/\u00a0/g, " ");
-    showReport(analyse(cleanResumeText, $("jobDescription").value), file.name);
+    cleanJobDescription = $("jobDescription").value.trim();
+    showReport(analyse(cleanResumeText, cleanJobDescription), file.name);
     $("status").textContent = "";
   } catch (error) {
     $("status").textContent =
@@ -476,8 +479,328 @@ $("startOver").addEventListener("click", () => {
   $("analysisForm").reset();
   $("offer").classList.add("hidden");
   $("feedbackPanel").classList.add("hidden");
+  cleanResumeText = "";
+  cleanJobDescription = "";
+  resetInterview();
 });
 
+const interviewApiUrl = window.CAREER_MATCH_CONFIG?.interviewApiUrl?.trim();
+let interviewRecorder = null;
+let interviewStream = null;
+let interviewAudioChunks = [];
+let recordingTimer = null;
+let cancelPendingRecording = false;
+
+function resetInterview() {
+  if (recordingTimer) clearTimeout(recordingTimer);
+  recordingTimer = null;
+  cancelPendingRecording = true;
+  if (interviewRecorder?.state === "recording") interviewRecorder.stop();
+  interviewStream?.getTracks().forEach((track) => track.stop());
+  interviewStream = null;
+  interviewRecorder = null;
+  interviewAudioChunks = [];
+  window.speechSynthesis?.cancel();
+  interviewState = null;
+  $("interviewSession").classList.add("hidden");
+  $("interviewError").textContent = "";
+  $("interviewFeedback").replaceChildren();
+  $("interviewAnswer").value = "";
+  $("codeAnswer").value = "";
+  $("spokenAnswerArea").classList.remove("hidden");
+  $("codingWorkspace").classList.add("hidden");
+  $("startAiInterview").disabled = false;
+  $("submitInterviewAnswer").disabled = false;
+  $("submitCode").disabled = false;
+  $("submitInterviewAnswer").classList.remove("hidden");
+  $("endAiInterview").classList.add("hidden");
+  $("recordAnswer").textContent = "🎙 Start recording";
+  $("recordingStatus").textContent = "";
+}
+
+function speakInterviewText(text) {
+  if (!$("readQuestionsAloud").checked || !window.speechSynthesis || !text) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function renderInterviewFeedback(feedback, title = "Interview feedback") {
+  const box = $("interviewFeedback");
+  box.replaceChildren();
+  if (!feedback) return;
+
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+  box.append(heading);
+
+  if (feedback.summary) {
+    const summary = document.createElement("p");
+    summary.textContent = feedback.summary;
+    box.append(summary);
+  }
+
+  [
+    ["What went well", feedback.strengths],
+    ["What was missed", feedback.missedPoints],
+    ["What to improve", feedback.improvements],
+    ["What you could add", feedback.recommendedAdditions]
+  ].forEach(([labelText, items]) => {
+    if (!items?.length) return;
+    const label = document.createElement("strong");
+    label.textContent = labelText;
+    const list = document.createElement("ul");
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.append(li);
+    });
+    box.append(label, list);
+  });
+}
+
+function updateInterviewProgress() {
+  const labels = {
+    intro: "INTRODUCTION",
+    project: "PROJECT DEEP DIVE",
+    fundamentals: "DBMS / OOP",
+    coding: "CODING CHALLENGE",
+    complexity: "CODE REVIEW & COMPLEXITY",
+    complete: "INTERVIEW COMPLETE"
+  };
+  $("interviewProgress").textContent = labels[interviewState.phase] || "MOCK INTERVIEW";
+}
+
+async function callInterviewApi(payload) {
+  if (!interviewApiUrl) {
+    throw new Error("Set the AI Worker URL in interviewApiUrl in config.js before using this feature.");
+  }
+  const response = await fetch(`${interviewApiUrl.replace(/\/$/, "")}/interview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "The AI interview could not be completed. Please try again.");
+  return result;
+}
+
+async function requestInterview(stage, answer = "", code = "") {
+  return callInterviewApi({
+    stage,
+    phase: interviewState.phase,
+    phaseTurns: interviewState.phaseTurns,
+    context: stage === "start"
+      ? { ...interviewState.context, resume: "", jobDescription: "" }
+      : interviewState.context,
+    transcript: interviewState.transcript,
+    currentQuestion: interviewState.question,
+    answer,
+    code,
+    language: $("codingLanguage").value
+  });
+}
+
+async function transcribeInterviewAudio(blob) {
+  if (!interviewApiUrl) throw new Error("The AI Worker URL is not configured.");
+  const form = new FormData();
+  const extension = blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm";
+  form.append("file", blob, `interview-answer.${extension}`);
+  const response = await fetch(`${interviewApiUrl.replace(/\/$/, "")}/transcribe`, { method: "POST", body: form });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Your recording could not be transcribed.");
+  if (!result.text?.trim()) throw new Error("No speech was detected. Try again or type your answer.");
+  return result.text.trim();
+}
+
+$("recordAnswer").addEventListener("click", async () => {
+  const button = $("recordAnswer");
+  const status = $("recordingStatus");
+  if (interviewRecorder?.state === "recording") {
+    button.disabled = true;
+    status.textContent = "Finishing recording…";
+    interviewRecorder.stop();
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    status.textContent = "Microphone recording is not supported in this browser. Type your answer instead.";
+    return;
+  }
+
+  try {
+    cancelPendingRecording = false;
+    interviewStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (cancelPendingRecording || !interviewState) {
+      interviewStream.getTracks().forEach((track) => track.stop());
+      interviewStream = null;
+      return;
+    }
+    const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
+    interviewRecorder = preferred ? new MediaRecorder(interviewStream, { mimeType: preferred }) : new MediaRecorder(interviewStream);
+    interviewAudioChunks = [];
+    interviewRecorder.ondataavailable = (event) => { if (event.data.size) interviewAudioChunks.push(event.data); };
+    interviewRecorder.onstop = async () => {
+      if (recordingTimer) clearTimeout(recordingTimer);
+      recordingTimer = null;
+      const recorder = interviewRecorder;
+      const blob = new Blob(interviewAudioChunks, { type: recorder?.mimeType || "audio/webm" });
+      interviewStream?.getTracks().forEach((track) => track.stop());
+      interviewStream = null;
+      interviewRecorder = null;
+      interviewAudioChunks = [];
+      button.disabled = false;
+      button.textContent = "🎙 Start recording";
+      if (cancelPendingRecording || !interviewState) return;
+      if (blob.size > 10 * 1024 * 1024) {
+        status.textContent = "That recording is too large. Keep answers under 90 seconds and try again.";
+        return;
+      }
+      status.textContent = "Transcribing your answer…";
+      button.disabled = true;
+      try {
+        $("interviewAnswer").value = await transcribeInterviewAudio(blob);
+        status.textContent = "Transcript ready. Review it, then submit your answer.";
+      } catch (error) {
+        status.textContent = `${error.message} You can type your answer instead.`;
+      } finally {
+        button.disabled = false;
+      }
+    };
+    interviewRecorder.start();
+    button.textContent = "Stop recording & transcribe";
+    status.textContent = "Recording… click to stop. Maximum 90 seconds.";
+    recordingTimer = setTimeout(() => {
+      if (interviewRecorder?.state === "recording") interviewRecorder.stop();
+    }, 90_000);
+  } catch (error) {
+    interviewStream?.getTracks().forEach((track) => track.stop());
+    interviewStream = null;
+    status.textContent = `${error.message || "Microphone access was not granted."} You can type your answer instead.`;
+  }
+});
+
+$("startAiInterview").addEventListener("click", async () => {
+  const startButton = $("startAiInterview");
+  $("interviewError").textContent = "";
+  startButton.disabled = true;
+  interviewState = {
+    phase: "intro",
+    phaseTurns: 0,
+    question: "",
+    transcript: [],
+    context: {
+      resume: cleanResumeText.slice(0, 8000),
+      jobDescription: cleanJobDescription.slice(0, 8000),
+      role: cleanJobDescription.split(/\r?\n/).find((line) => line.trim())?.slice(0, 120) || "Target role from the résumé",
+      interviewType: $("interviewType").value,
+      experienceLevel: $("interviewLevel").value
+    }
+  };
+
+  $("interviewSession").classList.remove("hidden");
+  $("interviewStatus").textContent = "Starting your interview…";
+  try {
+    const result = await requestInterview("start");
+    interviewState.phase = result.phase;
+    interviewState.phaseTurns = 0;
+    interviewState.question = result.question;
+    updateInterviewProgress();
+    $("interviewQuestion").textContent = result.question;
+    $("interviewStatus").textContent = "Your interviewer is ready. Use the microphone or type your answer.";
+    speakInterviewText(result.question);
+  } catch (error) {
+    $("interviewSession").classList.add("hidden");
+    $("interviewError").textContent = error.message;
+    interviewState = null;
+    startButton.disabled = false;
+  }
+});
+
+$("submitInterviewAnswer").addEventListener("click", async () => {
+  const answer = $("interviewAnswer").value.trim();
+  const status = $("interviewStatus");
+  if (!answer) { status.textContent = "Record or type your answer first."; return; }
+
+  const button = $("submitInterviewAnswer");
+  const answeredPhase = interviewState.phase;
+  button.disabled = true;
+  $("recordAnswer").disabled = true;
+  status.textContent = "Your interviewer is considering your answer…";
+  try {
+    const result = await requestInterview("answer", answer);
+    interviewState.transcript.push({ phase: answeredPhase, question: interviewState.question, answer, code: "", language: $("codingLanguage").value });
+    $("interviewAnswer").value = "";
+    if (result.isComplete || result.phase === "complete") {
+      interviewState.phase = "complete";
+      updateInterviewProgress();
+      $("interviewQuestion").textContent = "Thank you. That concludes the interview.";
+      status.textContent = result.summary;
+      renderInterviewFeedback(result.feedback, "Your final interview feedback");
+      $("endAiInterview").classList.remove("hidden");
+      $("spokenAnswerArea").classList.add("hidden");
+      speakInterviewText("Thank you. That concludes the interview.");
+      return;
+    }
+
+    interviewState.phase = result.phase;
+    interviewState.phaseTurns = result.phase === answeredPhase ? interviewState.phaseTurns + 1 : 0;
+    const nextQuestion = result.phase === "coding" ? (result.codePrompt || result.nextQuestion) : result.nextQuestion;
+    interviewState.question = nextQuestion;
+    updateInterviewProgress();
+    $("interviewQuestion").textContent = nextQuestion;
+    status.textContent = "";
+    const coding = result.phase === "coding";
+    $("spokenAnswerArea").classList.toggle("hidden", coding);
+    $("codingWorkspace").classList.toggle("hidden", !coding);
+    if (result.feedback?.summary) renderInterviewFeedback(result.feedback, "Code review");
+    speakInterviewText(nextQuestion);
+  } catch (error) {
+    status.textContent = `${error.message} Your answer is still here; you can retry.`;
+  } finally {
+    button.disabled = false;
+    $("recordAnswer").disabled = false;
+  }
+});
+
+$("submitCode").addEventListener("click", async () => {
+  const code = $("codeAnswer").value.trim();
+  const status = $("interviewStatus");
+  if (!code) { status.textContent = "Write your solution before submitting it."; return; }
+  const button = $("submitCode");
+  button.disabled = true;
+  status.textContent = "Reviewing your code…";
+  try {
+    const result = await requestInterview("code", "", code);
+    interviewState.transcript.push({ phase: "coding", question: interviewState.question, answer: "", code, language: $("codingLanguage").value });
+    interviewState.phase = result.phase;
+    interviewState.phaseTurns = 0;
+    interviewState.question = result.nextQuestion;
+    updateInterviewProgress();
+    $("interviewQuestion").textContent = result.nextQuestion;
+    $("codingWorkspace").classList.add("hidden");
+    $("spokenAnswerArea").classList.remove("hidden");
+    renderInterviewFeedback(result.feedback, "Code review");
+    status.textContent = "Now explain your solution aloud or type your answer.";
+    speakInterviewText(result.nextQuestion);
+  } catch (error) {
+    status.textContent = `${error.message} Your code is still here; you can retry.`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("codeAnswer").addEventListener("keydown", (event) => {
+  if (event.key !== "Tab") return;
+  event.preventDefault();
+  const field = event.currentTarget;
+  const start = field.selectionStart;
+  const end = field.selectionEnd;
+  field.setRangeText("    ", start, end, "end");
+});
+
+$("endAiInterview").addEventListener("click", resetInterview);
 $("printReport").addEventListener("click", () => window.print());
 
 function getScoreCardData() {
